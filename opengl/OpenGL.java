@@ -121,14 +121,14 @@ public class OpenGL {
 			throw new Exception(glGetProgramInfoLog(hProgram));
 
 		// upload model vertices to a vbo
-		var triangleVertices = new float[] { 0.0f, -0.5f, 0.0f, 0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f};
+		var triangleVertices = new float[] { 0.0f, 0f, 0.0f, 0.5f, 0f, 0.0f, 0.5f, -0.5f, 0.0f, 0f, -0.5f, 0.0f};
 		var colors = new float[] {0f, 0.5f, 1f, 0f, 1f, 0.5f, 0.6f, 0.3f, 0.3f};
 		var vboTriangleVertices = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboTriangleVertices);
 		glBufferData(GL_ARRAY_BUFFER, triangleVertices, GL_STATIC_DRAW);
 
 		// upload model indices to a vbo
-		var triangleIndices = new int[] {0, 1, 2};
+		var triangleIndices = new int[] {0, 1, 2, 0, 3, 2};
 		var vboTriangleIndices = glGenBuffers();
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangleIndices, GL_STATIC_DRAW);
