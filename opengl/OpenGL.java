@@ -19,6 +19,8 @@ import static org.lwjgl.opengl.GL40.*;
 import static org.lwjgl.opengl.GL41.*;
 import vectors.*;
 
+import java.util.ArrayList;
+
 public class OpenGL {
 	public static void main(String[] args) throws Exception {
 		// let GLFW work on the main thread (for macOS)
@@ -121,20 +123,49 @@ public class OpenGL {
 			throw new Exception(glGetProgramInfoLog(hProgram));
 
 		// upload model vertices to a vbo
-		var triangleVertices = new float[] { 0.0f, 0f, 0.0f, 0.5f, 0f, 0.0f, 0.5f, -0.5f, 0.0f, 0f, -0.5f, 0.0f};
-		var colors = new float[] {0f, 0.5f, 1f, 0f, 1f, 0.5f, 0.6f, 0.3f, 0.3f};
+
+		//var triangleVertices = new float[] { 0.0f, 0f, 0.0f, 0.5f, 0f, 0.0f, 0.5f, -0.5f, 0.0f, 0f, -0.5f, 0.0f};
+		var cubeVertices = new ArrayList<Vertex>();
+		var cubeTriangles = new ArrayList<Tri>();
+		MeshGenerator.addCube(cubeVertices, cubeTriangles,
+				new Vector3(0f, 0.5f, 1f),
+				new Vector3(0f, 1f, 0.5f),
+				new Vector3(0.6f, 0.3f, 0.3f),
+				new Vector3(1f, 0.5f, 0.5f),
+				new Vector3(0f, 1f, 1f),
+				new Vector3(1f, 0.5f, 1f));
+		int len = cubeVertices.size() * 3;
+		float[] verticesArray = new float[len];
+		int[] verticesIndexArray = new int[len];
+		float[] colors = new float[len];
+		int i = 0;
+		for (int j = 0; j < cubeVertices.size(); j++) {
+			verticesIndexArray[i] = i;
+			colors[i] = cubeVertices.get(j).color().x();
+			verticesArray[i] = cubeVertices.get(j).worldCoordinates().x();
+			i++;
+			verticesIndexArray[i] = i;
+			colors[i] = cubeVertices.get(j).color().y();
+			verticesArray[i] = cubeVertices.get(j).worldCoordinates().y();
+			i++;
+			verticesIndexArray[i] = i;
+			colors[i] = cubeVertices.get(j).color().z();
+			verticesArray[i] = cubeVertices.get(j).worldCoordinates().z();
+			i++;
+		}
+//		var colors = new float[] {0f, 0.5f, 1f, 0f, 1f, 0.5f, 0.6f, 0.3f, 0.3f};
 		var vboTriangleVertices = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboTriangleVertices);
-		glBufferData(GL_ARRAY_BUFFER, triangleVertices, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, verticesArray, GL_STATIC_DRAW);
 
 		// upload model indices to a vbo
-		var triangleIndices = new int[] {0, 1, 2, 0, 3, 2};
+		var triangleIndices = verticesIndexArray;//new int[] {0, 1, 2, 0, 3, 2};
 		var vboTriangleIndices = glGenBuffers();
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangleIndices, GL_STATIC_DRAW);
 		var vboVertexColors = glGenBuffers();
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboVertexColors);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, colors, GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, vboVertexColors);
+		glBufferData(GL_ARRAY_BUFFER, colors, GL_STATIC_DRAW);
 		// set up a vao
 		var vaoTriangle = glGenVertexArrays();
 		glBindVertexArray(vaoTriangle);
