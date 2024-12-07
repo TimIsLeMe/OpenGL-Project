@@ -1,0 +1,28 @@
+<component name="libraryTable">
+  <library name="lwjgl">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-assimp.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-assimp-natives-linux.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-assimp-natives-macos.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-assimp-natives-macos-arm64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-assimp-natives-windows.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-glfw.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-glfw-natives-linux.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-glfw-natives-macos.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-glfw-natives-macos-arm64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-glfw-natives-windows.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-natives-linux.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-natives-macos.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-natives-macos-arm64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-natives-windows.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-opengl.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-opengl-natives-linux.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-opengl-natives-macos.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-opengl-natives-macos-arm64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/opengl/lwjgl-opengl-natives-windows.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
