@@ -20,6 +20,7 @@ import static org.lwjgl.opengl.GL41.*;
 import vectors.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class OpenGL {
 	public static void main(String[] args) throws Exception {
@@ -63,6 +64,8 @@ public class OpenGL {
 		}
 		glEnable(GL_FRAMEBUFFER_SRGB);
 		glClearColor(0.5f, 0.5f, 0.5f, 0.0f);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
 		// glClearDepth(1);
 		// glDisable(GL_DEPTH_TEST);
 		// glDepthFunc(GL_LESS);
@@ -83,7 +86,7 @@ public class OpenGL {
 				void main()
 				{
 					color = inColor;
-					gl_Position = vec4(inPos, 1.0) + vec4(sin(inTime) * 0.5, cos(inTime) * 0.5, 0.0, 0.0) * inMatrix;
+					gl_Position = inMatrix * vec4(inPos, 1.0) + vec4(sin(inTime) * 0.5, cos(inTime) * 0.5, 0.0, 0.0);
 					fromVertexShaderToFragmentShader = inPos.x + 0.5;
 				}
 				""";
@@ -128,38 +131,41 @@ public class OpenGL {
 		var cubeVertices = new ArrayList<Vertex>();
 		var cubeTriangles = new ArrayList<Tri>();
 		MeshGenerator.addCube(cubeVertices, cubeTriangles,
-				new Vector3(0f, 0.5f, 1f),
-				new Vector3(0f, 1f, 0.5f),
-				new Vector3(0.6f, 0.3f, 0.3f),
-				new Vector3(1f, 0.5f, 0.5f),
+				new Vector3(1f, 0f, 0f),
+				new Vector3(0f, 1f, 0f),
+				new Vector3(0f, 0f, 1f),
+				new Vector3(1f, 1f, 0f),
 				new Vector3(0f, 1f, 1f),
-				new Vector3(1f, 0.5f, 1f));
+				new Vector3(1f, 0f, 1f));
 		int len = cubeVertices.size() * 3;
 		float[] verticesArray = new float[len];
-		int[] verticesIndexArray = new int[len];
 		float[] colors = new float[len];
-		int i = 0;
-		for (int j = 0; j < cubeVertices.size(); j++) {
-			verticesIndexArray[i] = i;
-			colors[i] = cubeVertices.get(j).color().x();
-			verticesArray[i] = cubeVertices.get(j).worldCoordinates().x();
-			i++;
-			verticesIndexArray[i] = i;
-			colors[i] = cubeVertices.get(j).color().y();
-			verticesArray[i] = cubeVertices.get(j).worldCoordinates().y();
-			i++;
-			verticesIndexArray[i] = i;
-			colors[i] = cubeVertices.get(j).color().z();
-			verticesArray[i] = cubeVertices.get(j).worldCoordinates().z();
-			i++;
+		int indLen = cubeTriangles.size() * 3;
+		int[] triangleIndices = new int[indLen];
+
+		int ind = 0;
+		for (Tri triangle : cubeTriangles) {
+			triangleIndices[ind++] = triangle.a();
+			triangleIndices[ind++] = triangle.b();
+			triangleIndices[ind++] = triangle.c();
 		}
+		int k = 0;
+		for(int j = 0; j < cubeVertices.size(); j++) {
+			var v = cubeVertices.get(j);
+			colors[k] = v.color().x();
+			verticesArray[k++] = v.position().x();
+			colors[k] = v.color().y();
+			verticesArray[k++] = v.position().y();
+			colors[k] = v.color().z();
+			verticesArray[k++] = v.position().z();
+		}
+
 //		var colors = new float[] {0f, 0.5f, 1f, 0f, 1f, 0.5f, 0.6f, 0.3f, 0.3f};
 		var vboTriangleVertices = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboTriangleVertices);
 		glBufferData(GL_ARRAY_BUFFER, verticesArray, GL_STATIC_DRAW);
-
 		// upload model indices to a vbo
-		var triangleIndices = verticesIndexArray;//new int[] {0, 1, 2, 0, 3, 2};
+//		var triangleIndices = verticesIndexArray;//new int[] {0, 1, 2, 0, 3, 2};
 		var vboTriangleIndices = glGenBuffers();
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangleIndices, GL_STATIC_DRAW);
@@ -188,10 +194,13 @@ public class OpenGL {
 		var error = glGetError();
 		if (error != GL_NO_ERROR)
 			throw new Exception(Integer.toString(error));
-
+		var matrix = Matrix4x4.createScale(0.2f);
+		var matrix2 = matrix.multiply(Matrix4x4.createTranslation(0.6f, -0.3f, 0.6f));
+		var matrix3 = matrix2.multiply(Matrix4x4.createTranslation(-0.5f, 0.6f, 0f));
 		// render loop
 		var startTime = System.currentTimeMillis();
 		while (!GLFW.glfwWindowShouldClose(hWindow)) {
+			var time = (float) (System.currentTimeMillis() - startTime) * 0.001f;
 			// clear screen and z-buffer
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -199,18 +208,24 @@ public class OpenGL {
 			glUseProgram(hProgram);
 			
 			// set uniform values
-			glUniform1f(glGetUniformLocation(hProgram, "inTime"), (float) (System.currentTimeMillis() - startTime) * 0.001f);
+			glUniform1f(glGetUniformLocation(hProgram, "inTime"), time);
 
-			var someMatrix = Matrix4x4.IDENTITY;
+			var someMatrix = matrix.multiply(Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someMatrix.toArray());
-			
+
 			// render our model
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
-			// render our model
-			var someOtherMatrix = Matrix4x4.createScale(1.5f, 1.5f, 0f);
+			// render our model 2
+			var someOtherMatrix = matrix2.multiply(Matrix4x4.createRotationX((float) Math.sin(time))).multiply(Matrix4x4.createRotationY((float) Math.cos(time)));
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherMatrix.toArray());
+			glBindVertexArray(vaoTriangle);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
+			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
+			// render our model 3
+			var someOtherOtherMatrix = matrix3.multiply(Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)));
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherOtherMatrix.toArray());
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
