@@ -1,5 +1,4 @@
 package vectors;
-
 /*
  * Copyright (c) 2013 - 2024 Simon Felix
  * All rights reserved.

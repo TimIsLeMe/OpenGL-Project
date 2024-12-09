@@ -3,24 +3,19 @@ package opengl;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GLDebugMessageCallback;
-
+import custom.Texture;
 import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 import static org.lwjgl.opengl.GL.*;
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-import static org.lwjgl.opengl.GL13.*;
-import static org.lwjgl.opengl.GL14.*;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL21.*;
 import static org.lwjgl.opengl.GL30.*;
-import static org.lwjgl.opengl.GL31.*;
-import static org.lwjgl.opengl.GL40.*;
-import static org.lwjgl.opengl.GL41.*;
+
 import vectors.*;
 
+import java.nio.IntBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Vector;
 
 public class OpenGL {
 	public static void main(String[] args) throws Exception {
@@ -38,6 +33,7 @@ public class OpenGL {
 		GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_DEBUG_CONTEXT, GLFW.GLFW_TRUE);
 		GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_PROFILE, GLFW.GLFW_OPENGL_CORE_PROFILE);
 		GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_FORWARD_COMPAT, GLFW.GLFW_TRUE);
+
 		var hWindow = GLFW.glfwCreateWindow(720, 480, "ComGr", 0, 0);
 		GLFW.glfwSetWindowSizeCallback(hWindow, (window, width, height) -> {
 			var w = new int[1];
@@ -104,12 +100,16 @@ public class OpenGL {
 				in float fromVertexShaderToFragmentShader;
 				in vec4 gl_FragCoord;
 				in vec3 color;
+				uniform sampler2D brickTexture;
 				
 				void main()
 				{
+				  
 				  outColor = vec4(fromVertexShaderToFragmentShader, color);
 				}
 				""";
+		// vec4 texelColor = texture(brickTexture, vec2(0,0));
+		// outColor = vec4(fromVertexShaderToFragmentShader, color)
 		// outColor = vec4(fromVertexShaderToFragmentShader, 0.75, 0.0, 1.0);
 		var hFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(hFragmentShader, FragmentShaderSource);
@@ -140,6 +140,7 @@ public class OpenGL {
 		int len = cubeVertices.size() * 3;
 		float[] verticesArray = new float[len];
 		float[] colors = new float[len];
+		float[] verticesST = new float[cubeVertices.size() * 2];
 		int indLen = cubeTriangles.size() * 3;
 		int[] triangleIndices = new int[indLen];
 
@@ -150,6 +151,7 @@ public class OpenGL {
 			triangleIndices[ind++] = triangle.c();
 		}
 		int k = 0;
+		int k2 = 0;
 		for(int j = 0; j < cubeVertices.size(); j++) {
 			var v = cubeVertices.get(j);
 			colors[k] = v.color().x();
@@ -158,6 +160,8 @@ public class OpenGL {
 			verticesArray[k++] = v.position().y();
 			colors[k] = v.color().z();
 			verticesArray[k++] = v.position().z();
+			verticesST[k2++] = v.st().x();
+			verticesST[k2++] = v.st().y();
 		}
 
 //		var colors = new float[] {0f, 0.5f, 1f, 0f, 1f, 0.5f, 0.6f, 0.3f, 0.3f};
@@ -172,6 +176,9 @@ public class OpenGL {
 		var vboVertexColors = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboVertexColors);
 		glBufferData(GL_ARRAY_BUFFER, colors, GL_STATIC_DRAW);
+//		var vboVertexST = glGenBuffers();
+//		glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
+//		glBufferData(GL_ARRAY_BUFFER, verticesST, GL_STATIC_DRAW);
 		// set up a vao
 		var vaoTriangle = glGenVertexArrays();
 		glBindVertexArray(vaoTriangle);
@@ -181,36 +188,70 @@ public class OpenGL {
 			glBindBuffer(GL_ARRAY_BUFFER, vboTriangleVertices);
 			glVertexAttribPointer(posAttribIndex, 3, GL_FLOAT, false, 0, 0);
 		}
-		glBindVertexArray(vaoTriangle);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
+		// also vao
 		var colorAttribIndex = glGetAttribLocation(hProgram, "inColor");
 		if (colorAttribIndex != -1) {
 			glEnableVertexAttribArray(colorAttribIndex);
 			glBindBuffer(GL_ARRAY_BUFFER, vboVertexColors);
 			glVertexAttribPointer(colorAttribIndex, 3, GL_FLOAT, false, 0, 0);
 		}
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
-
+//		var stAttributeIndex = glGetAttribLocation(hProgram, "inSt");
+//		if (stAttributeIndex != -1) {
+//			glEnableVertexAttribArray(stAttributeIndex);
+//			glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
+//			glVertexAttribPointer(stAttributeIndex, 2, GL_FLOAT, false, 0, 0);
+//		}
+		// texture example
+//		var texture = new Texture("../textures/MinecraftGlowstone.jpg", "jpg");
+//		int hTexture = glGenTextures();
+//		glBindTexture(GL_TEXTURE_2D, hTexture);
+//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+//		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, texture.getTexture().getWidth(), texture.getTexture().getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, texture.getTextureBuffer());
+		// glBindTexture(GL_TEXTURE_2D, 0);
 		// check for errors during all previous calls
 		var error = glGetError();
 		if (error != GL_NO_ERROR)
 			throw new Exception(Integer.toString(error));
-		var matrix = Matrix4x4.createScale(0.2f);
-		var matrix2 = matrix.multiply(Matrix4x4.createTranslation(0.6f, -0.3f, 0.6f));
-		var matrix3 = matrix2.multiply(Matrix4x4.createTranslation(-0.5f, 0.6f, 0f));
+
+
+		float zNear = 0.1f;
+		float zFar = 100f;
+		Vector3 eye = new Vector3(0, 0, -4);
+		Vector3 up = new Vector3(0, 1, 0);
+		Vector3 lookAt = new Vector3(0, 0, 0);
+		Matrix4x4 V = Matrix4x4.createLookAt(eye, lookAt, up);
+		int[] width = new int[1];
+		int[] height = new int[1];
+		var matrix2 = Matrix4x4.createTranslation(2f, -2f, 1.5f);
+		var matrix3 = Matrix4x4.createTranslation(-2f, 2f, 1.25f);
 		// render loop
 		var startTime = System.currentTimeMillis();
 		while (!GLFW.glfwWindowShouldClose(hWindow)) {
+			GLFW.glfwGetWindowSize(hWindow, width, height);
+			float aspectRatio = width[0] / (float) height[0];
+			Matrix4x4 P = Matrix4x4.createPerspectiveFieldOfView(1.5708f, aspectRatio, zNear, zFar);
+			var mvp = V.multiply(P);
 			var time = (float) (System.currentTimeMillis() - startTime) * 0.001f;
 			// clear screen and z-buffer
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			// switch to our shader
 			glUseProgram(hProgram);
-			
+
+			// set texture
+//			int tiuIndex = 1;
+//			glActiveTexture(GL_TEXTURE0 + tiuIndex);
+//			glBindTexture(GL_TEXTURE_2D, hTexture);
+//			glUniform1i(glGetUniformLocation(hProgram, "brickTexture"), tiuIndex);
+//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
 			// set uniform values
 			glUniform1f(glGetUniformLocation(hProgram, "inTime"), time);
 
-			var someMatrix = matrix.multiply(Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
+			var someMatrix = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time))).multiply(mvp);
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someMatrix.toArray());
 
 			// render our model
@@ -218,13 +259,15 @@ public class OpenGL {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
 			// render our model 2
-			var someOtherMatrix = matrix2.multiply(Matrix4x4.createRotationX((float) Math.sin(time))).multiply(Matrix4x4.createRotationY((float) Math.cos(time)));
+			var someOtherMatrix = Matrix4x4.createRotationX((float) Math.sin(time)).multiply(Matrix4x4.createRotationY((float) Math.cos(time)))
+					.multiply(matrix2).multiply(mvp);
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherMatrix.toArray());
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
 			// render our model 3
-			var someOtherOtherMatrix = matrix3.multiply(Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)));
+			var someOtherOtherMatrix = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
+					.multiply(matrix3).multiply(mvp);
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherOtherMatrix.toArray());
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
