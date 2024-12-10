@@ -129,7 +129,6 @@ public class OpenGL {
 				  vec3 diffuse = diff * lightColor;
 				  vec3 specular = spec * lightColor;
 				  outColor = vec4((ambient + diffuse + specular) * color, 1.0);
-				  //outColor = vec4(fromVertexShaderToFragmentShader, color);
 				}
 				""";
 		// vec4 texelColor = texture(brickTexture, vec2(0,0));
