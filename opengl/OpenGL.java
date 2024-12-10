@@ -71,18 +71,27 @@ public class OpenGL {
 		// see https://www.khronos.org/opengl/wiki/Vertex_Shader
 		var VertexShaderSource = """
 				#version 400 core
-				
+								
 				uniform float inTime;
 				uniform mat4 inMatrix;
+				uniform mat4 transfM;
+				uniform mat4 modelMatrix;
 				out float fromVertexShaderToFragmentShader;
+				out vec3 color;
+				out vec3 fragNormal;
+				out vec3 fragPos;
 				in vec3 inPos;
 				in vec3 inColor;
-				out vec3 color;
-				
+				in vec3 inNormal;
+								
 				void main()
 				{
+					vec4 movement = vec4(sin(inTime) * 0.5, cos(inTime) * 0.5, 0.0, 0.0);
+					vec4 worldPos = modelMatrix * vec4(inPos, 1.0);
+				    fragPos = gl_Position.xyz;
+				    fragNormal = normalize(mat3(transfM) * inNormal);
 					color = inColor;
-					gl_Position = inMatrix * vec4(inPos, 1.0) + vec4(sin(inTime) * 0.5, cos(inTime) * 0.5, 0.0, 0.0);
+					gl_Position = inMatrix * vec4(inPos, 1.0);
 					fromVertexShaderToFragmentShader = inPos.x + 0.5;
 				}
 				""";
@@ -95,17 +104,32 @@ public class OpenGL {
 		// see https://www.khronos.org/opengl/wiki/Fragment_Shader
 		var FragmentShaderSource = """
 				#version 400 core
-		
+						
 				out vec4 outColor;
 				in float fromVertexShaderToFragmentShader;
 				in vec4 gl_FragCoord;
 				in vec3 color;
+				in vec3 fragNormal;
+				in vec3 fragPos;
+				uniform vec3 lightPos;
+				uniform vec3 viewPos;
+				uniform vec3 lightColor;
 				uniform sampler2D brickTexture;
-				
+								
 				void main()
 				{
-				  
-				  outColor = vec4(fromVertexShaderToFragmentShader, color);
+				  float phongK = 8.0;
+				  vec3 norm = normalize(fragNormal);
+				  vec3 lightDir = normalize(lightPos - fragPos);
+				  vec3 viewDir = normalize(viewPos - fragPos);
+				  float diff = max(dot(norm, lightDir), 0.0);
+				  vec3 reflectDir = reflect(-lightDir, norm);
+				  float spec = pow(max(dot(viewDir, reflectDir), 0.0), phongK);
+				  vec3 ambient = 0.1 * lightColor;
+				  vec3 diffuse = diff * lightColor;
+				  vec3 specular = spec * lightColor;
+				  outColor = vec4((ambient + diffuse + specular) * color, 1.0);
+				  //outColor = vec4(fromVertexShaderToFragmentShader, color);
 				}
 				""";
 		// vec4 texelColor = texture(brickTexture, vec2(0,0));
@@ -143,7 +167,7 @@ public class OpenGL {
 		float[] verticesST = new float[cubeVertices.size() * 2];
 		int indLen = cubeTriangles.size() * 3;
 		int[] triangleIndices = new int[indLen];
-
+		float[] vertexNormals = new float[len * 3];
 		int ind = 0;
 		for (Tri triangle : cubeTriangles) {
 			triangleIndices[ind++] = triangle.a();
@@ -154,10 +178,14 @@ public class OpenGL {
 		int k2 = 0;
 		for(int j = 0; j < cubeVertices.size(); j++) {
 			var v = cubeVertices.get(j);
+			var normal = v.normal();
+			vertexNormals[k] = normal.x();
 			colors[k] = v.color().x();
 			verticesArray[k++] = v.position().x();
+			vertexNormals[k] = normal.y();
 			colors[k] = v.color().y();
 			verticesArray[k++] = v.position().y();
+			vertexNormals[k] = normal.z();
 			colors[k] = v.color().z();
 			verticesArray[k++] = v.position().z();
 			verticesST[k2++] = v.st().x();
@@ -176,6 +204,9 @@ public class OpenGL {
 		var vboVertexColors = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboVertexColors);
 		glBufferData(GL_ARRAY_BUFFER, colors, GL_STATIC_DRAW);
+		var vboVertexNormals = glGenBuffers();
+		glBindBuffer(GL_ARRAY_BUFFER, vboVertexNormals);
+		glBufferData(GL_ARRAY_BUFFER, vertexNormals, GL_STATIC_DRAW);
 //		var vboVertexST = glGenBuffers();
 //		glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
 //		glBufferData(GL_ARRAY_BUFFER, verticesST, GL_STATIC_DRAW);
@@ -196,6 +227,13 @@ public class OpenGL {
 			glBindBuffer(GL_ARRAY_BUFFER, vboVertexColors);
 			glVertexAttribPointer(colorAttribIndex, 3, GL_FLOAT, false, 0, 0);
 		}
+		var normalAttribIndex = glGetAttribLocation(hProgram, "inNormal");
+		if (normalAttribIndex != -1) {
+			glEnableVertexAttribArray(normalAttribIndex);
+			glBindBuffer(GL_ARRAY_BUFFER, vboVertexNormals);
+			glVertexAttribPointer(normalAttribIndex, 3, GL_FLOAT, false, 0, 0);
+		}
+
 //		var stAttributeIndex = glGetAttribLocation(hProgram, "inSt");
 //		if (stAttributeIndex != -1) {
 //			glEnableVertexAttribArray(stAttributeIndex);
@@ -223,6 +261,7 @@ public class OpenGL {
 		Vector3 up = new Vector3(0, 1, 0);
 		Vector3 lookAt = new Vector3(0, 0, 0);
 		Matrix4x4 V = Matrix4x4.createLookAt(eye, lookAt, up);
+		Vector3 lightPos = new Vector3(0, 10, -2);
 		int[] width = new int[1];
 		int[] height = new int[1];
 		var matrix2 = Matrix4x4.createTranslation(2f, -2f, 1.5f);
@@ -249,26 +288,40 @@ public class OpenGL {
 //			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 
 			// set uniform values
+			glUniform3f(glGetUniformLocation(hProgram, "lightPos"), lightPos.x(), lightPos.y(), lightPos.z());
+			glUniform3f(glGetUniformLocation(hProgram, "viewPos"), eye.x(), eye.y(), eye.z());
+			glUniform3f(glGetUniformLocation(hProgram, "lightColor"), 1.0f, 1.0f, 1.0f);
 			glUniform1f(glGetUniformLocation(hProgram, "inTime"), time);
 
-			var someMatrix = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time))).multiply(mvp);
+			var m = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
+			var someMatrix = m.multiply(mvp);
+			var transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someMatrix.toArray());
-
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
 			// render our model
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
 			// render our model 2
-			var someOtherMatrix = Matrix4x4.createRotationX((float) Math.sin(time)).multiply(Matrix4x4.createRotationY((float) Math.cos(time)))
-					.multiply(matrix2).multiply(mvp);
+			m = Matrix4x4.createRotationX((float) Math.sin(time)).multiply(Matrix4x4.createRotationY((float) Math.cos(time)))
+					.multiply(matrix2);
+			var someOtherMatrix = m.multiply(mvp);
+			transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherMatrix.toArray());
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
 			// render our model 3
-			var someOtherOtherMatrix = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
-					.multiply(matrix3).multiply(mvp);
+			m = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
+					.multiply(matrix3);
+			var someOtherOtherMatrix = m.multiply(mvp);
+			transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
 			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherOtherMatrix.toArray());
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
+			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
