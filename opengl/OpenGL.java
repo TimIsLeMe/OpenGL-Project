@@ -80,9 +80,11 @@ public class OpenGL {
 				out vec3 color;
 				out vec3 fragNormal;
 				out vec3 fragPos;
+				out vec2 st;
 				in vec3 inPos;
 				in vec3 inColor;
 				in vec3 inNormal;
+				in vec2 inSt;
 								
 				void main()
 				{
@@ -92,6 +94,7 @@ public class OpenGL {
 				    fragNormal = normalize(mat3(transfM) * inNormal);
 					color = inColor;
 					gl_Position = inMatrix * vec4(inPos, 1.0);
+					st = inSt;
 					fromVertexShaderToFragmentShader = inPos.x + 0.5;
 				}
 				""";
@@ -111,14 +114,20 @@ public class OpenGL {
 				in vec3 color;
 				in vec3 fragNormal;
 				in vec3 fragPos;
+				in vec2 st;
 				uniform vec3 lightPos;
 				uniform vec3 viewPos;
 				uniform vec3 lightColor;
-				uniform sampler2D brickTexture;
-								
+				uniform sampler2D textureT;
+				uniform float phongK;
+				uniform int hasTexture;
+				
 				void main()
 				{
-				  float phongK = 8.0;
+				  vec3 textureColor = color;
+				  if(hasTexture == 1) {
+				  	textureColor = texture(textureT, st).xyz;
+				  }
 				  vec3 norm = normalize(fragNormal);
 				  vec3 lightDir = normalize(lightPos - fragPos);
 				  vec3 viewDir = normalize(viewPos - fragPos);
@@ -128,7 +137,7 @@ public class OpenGL {
 				  vec3 ambient = 0.1 * lightColor;
 				  vec3 diffuse = diff * lightColor;
 				  vec3 specular = spec * lightColor;
-				  outColor = vec4((ambient + diffuse + specular) * color, 1.0);
+				  outColor = vec4((ambient + diffuse + specular) * textureColor, 1.0);
 				}
 				""";
 		// vec4 texelColor = texture(brickTexture, vec2(0,0));
@@ -206,9 +215,9 @@ public class OpenGL {
 		var vboVertexNormals = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vboVertexNormals);
 		glBufferData(GL_ARRAY_BUFFER, vertexNormals, GL_STATIC_DRAW);
-//		var vboVertexST = glGenBuffers();
-//		glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
-//		glBufferData(GL_ARRAY_BUFFER, verticesST, GL_STATIC_DRAW);
+		var vboVertexST = glGenBuffers();
+		glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
+		glBufferData(GL_ARRAY_BUFFER, verticesST, GL_STATIC_DRAW);
 		// set up a vao
 		var vaoTriangle = glGenVertexArrays();
 		glBindVertexArray(vaoTriangle);
@@ -233,21 +242,20 @@ public class OpenGL {
 			glVertexAttribPointer(normalAttribIndex, 3, GL_FLOAT, false, 0, 0);
 		}
 
-//		var stAttributeIndex = glGetAttribLocation(hProgram, "inSt");
-//		if (stAttributeIndex != -1) {
-//			glEnableVertexAttribArray(stAttributeIndex);
-//			glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
-//			glVertexAttribPointer(stAttributeIndex, 2, GL_FLOAT, false, 0, 0);
-//		}
-		// texture example
-//		var texture = new Texture("../textures/MinecraftGlowstone.jpg", "jpg");
-//		int hTexture = glGenTextures();
-//		glBindTexture(GL_TEXTURE_2D, hTexture);
-//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-//		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, texture.getTexture().getWidth(), texture.getTexture().getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, texture.getTextureBuffer());
-		// glBindTexture(GL_TEXTURE_2D, 0);
+		var stAttributeIndex = glGetAttribLocation(hProgram, "inSt");
+		if (stAttributeIndex != -1) {
+			glEnableVertexAttribArray(stAttributeIndex);
+			glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
+			glVertexAttribPointer(stAttributeIndex, 2, GL_FLOAT, false, 0, 0);
+		}
+//		 texture example
+		var texture = new Texture("../textures/MinecraftGlowstone.jpg");
+		var textures = texture.createMIP(5);
+		int hTexture = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, hTexture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, textures[4].getTexture().getWidth(), textures[4].getTexture().getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, textures[4].getTextureBuffer());
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		// check for errors during all previous calls
 		var error = glGetError();
 		if (error != GL_NO_ERROR)
@@ -265,6 +273,7 @@ public class OpenGL {
 		int[] height = new int[1];
 		var matrix2 = Matrix4x4.createTranslation(2f, -2f, 1.5f);
 		var matrix3 = Matrix4x4.createTranslation(-2f, 2f, 1.25f);
+		float phongK =  8.0f;
 		// render loop
 		var startTime = System.currentTimeMillis();
 		while (!GLFW.glfwWindowShouldClose(hWindow)) {
@@ -280,17 +289,18 @@ public class OpenGL {
 			glUseProgram(hProgram);
 
 			// set texture
-//			int tiuIndex = 1;
-//			glActiveTexture(GL_TEXTURE0 + tiuIndex);
-//			glBindTexture(GL_TEXTURE_2D, hTexture);
-//			glUniform1i(glGetUniformLocation(hProgram, "brickTexture"), tiuIndex);
-//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-
+			int tiuIndex = 1;
+			glActiveTexture(GL_TEXTURE0 + tiuIndex);
+			glBindTexture(GL_TEXTURE_2D, hTexture);
+			glUniform1i(glGetUniformLocation(hProgram, "textureT"), tiuIndex);
+			glUniform1i(glGetUniformLocation(hProgram, "hasTexture"), 1);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			// set uniform values
 			glUniform3f(glGetUniformLocation(hProgram, "lightPos"), lightPos.x(), lightPos.y(), lightPos.z());
 			glUniform3f(glGetUniformLocation(hProgram, "viewPos"), eye.x(), eye.y(), eye.z());
 			glUniform3f(glGetUniformLocation(hProgram, "lightColor"), 1.0f, 1.0f, 1.0f);
 			glUniform1f(glGetUniformLocation(hProgram, "inTime"), time);
+			glUniform1f(glGetUniformLocation(hProgram, "phongK"), phongK);
 
 			var m = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
 			var someMatrix = m.multiply(mvp);
