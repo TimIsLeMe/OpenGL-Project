@@ -13,6 +13,7 @@ import static org.lwjgl.opengl.GL30.*;
 
 import vectors.*;
 
+import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Vector;
@@ -162,6 +163,7 @@ public class OpenGL {
 		//var triangleVertices = new float[] { 0.0f, 0f, 0.0f, 0.5f, 0f, 0.0f, 0.5f, -0.5f, 0.0f, 0f, -0.5f, 0.0f};
 		var cubeVertices = new ArrayList<Vertex>();
 		var cubeTriangles = new ArrayList<Tri>();
+		// MeshGenerator.addSphere(cubeVertices, cubeTriangles, 5, new Vector3(0.45f, 0.35f, 0.25f));
 		MeshGenerator.addCube(cubeVertices, cubeTriangles,
 				new Vector3(1f, 0f, 0f),
 				new Vector3(0f, 1f, 0f),
@@ -248,19 +250,54 @@ public class OpenGL {
 			glBindBuffer(GL_ARRAY_BUFFER, vboVertexST);
 			glVertexAttribPointer(stAttributeIndex, 2, GL_FLOAT, false, 0, 0);
 		}
-//		 texture example
-		var texture = new Texture("../textures/MinecraftGlowstone.jpg");
-		var textures = texture.createMIP(5);
+		// main texture example
+		var texture = new Texture("./textures/MinecraftGlowstone.jpg");
 		int hTexture = glGenTextures();
 		glBindTexture(GL_TEXTURE_2D, hTexture);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, textures[4].getTexture().getWidth(), textures[4].getTexture().getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, textures[4].getTextureBuffer());
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.getTexture().getWidth(), texture.getTexture().getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, texture.getTextureBuffer());
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+		// texture for fbo
+		int fboWidth = 512, fboHeight = 512;
+		int fboTextureId = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, fboTextureId);
+		glTexParameteri(GL_TEXTURE_2D,
+				GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D,
+				GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+				GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+				GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+				fboWidth, fboHeight, 0, GL_RGBA,
+				GL_UNSIGNED_BYTE, 0);
+		// allocate renderbuffer
+		int rboId = glGenRenderbuffers();
+		glBindRenderbuffer(GL_RENDERBUFFER, rboId);
+		glRenderbufferStorage(GL_RENDERBUFFER,
+				GL_DEPTH_COMPONENT,
+				fboWidth, fboHeight);
+		// setup fbo
+		int fboId = glGenFramebuffers();
+		glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+		glFramebufferTexture2D(GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0,
+				GL_TEXTURE_2D,
+				fboTextureId,
+				0);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER,
+				GL_DEPTH_ATTACHMENT,
+				GL_RENDERBUFFER,
+				rboId);
+
 		// check for errors during all previous calls
+		assert(glCheckFramebufferStatus(GL_FRAMEBUFFER)
+				== GL_FRAMEBUFFER_COMPLETE);
 		var error = glGetError();
 		if (error != GL_NO_ERROR)
 			throw new Exception(Integer.toString(error));
-
 
 		float zNear = 0.1f;
 		float zFar = 100f;
@@ -302,6 +339,20 @@ public class OpenGL {
 			glUniform1f(glGetUniformLocation(hProgram, "inTime"), time);
 			glUniform1f(glGetUniformLocation(hProgram, "phongK"), phongK);
 
+			// setup to render into fbo
+			glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+			glViewport(0, 0, fboWidth, fboHeight);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			// TODO: render onto texture (needs additional vertex and fragment shaders)
+
+
+			// render to screen
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glViewport(0, 0, width[0], height[0]);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			// rendering objects:
 			var m = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
 			var someMatrix = m.multiply(mvp);
 			var transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
@@ -334,6 +385,8 @@ public class OpenGL {
 			glBindVertexArray(vaoTriangle);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
+			// end of rendering objects
+
 			// display
 			GLFW.glfwSwapBuffers(hWindow);
 			GLFW.glfwPollEvents();
