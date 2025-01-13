@@ -69,6 +69,54 @@ public class OpenGL {
 		// glDisable(GL_CULL_FACE);
 
 		// load, compile and link shaders
+		// Post Processing Shaders:
+		var PPVertexShaderSource = """
+				#version 400 core
+				in vec3 aPos;
+				in vec2 aTexCoords;
+
+				out vec2 TexCoords;
+
+				void main()
+				{
+				    TexCoords = aTexCoords;
+
+				    // Standard vertex position transformation (pass through)
+				    gl_Position = vec4(aPos, 1.0);
+				}
+				""";
+		var hPPVertexShader = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(hPPVertexShader, PPVertexShaderSource);
+		glCompileShader(hPPVertexShader);
+		if (glGetShaderi(hPPVertexShader, GL_COMPILE_STATUS) != GL_TRUE)
+			throw new Exception(glGetShaderInfoLog(hPPVertexShader));
+
+		var PPFragmentShaderSource = """
+				#version 400 core
+				in vec2 TexCoords;
+				out vec4 outColor;
+				uniform sampler2D screenTexture;
+
+				void main()
+				{
+					outColor = texture(screenTexture, TexCoords);
+					// reduce blue light
+					outColor = vec4(outColor.x, outColor.y, outColor.z / 3, outColor.w);
+				}
+				""";
+		var hPPFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(hPPFragmentShader, PPFragmentShaderSource);
+		glCompileShader(hPPFragmentShader);
+		if (glGetShaderi(hPPFragmentShader, GL_COMPILE_STATUS) != GL_TRUE)
+			throw new Exception(glGetShaderInfoLog(hPPFragmentShader));
+
+		var hPPProgram = glCreateProgram();
+		glAttachShader(hPPProgram, hPPFragmentShader);
+		glAttachShader(hPPProgram, hPPVertexShader);
+		glLinkProgram(hPPProgram);
+		if (glGetProgrami(hPPProgram, GL_LINK_STATUS) != GL_TRUE)
+			throw new Exception(glGetProgramInfoLog(hPPProgram));
+
 		// see https://www.khronos.org/opengl/wiki/Vertex_Shader
 		var VertexShaderSource = """
 				#version 400 core
@@ -158,53 +206,7 @@ public class OpenGL {
 		if (glGetProgrami(hProgram, GL_LINK_STATUS) != GL_TRUE)
 			throw new Exception(glGetProgramInfoLog(hProgram));
 
-		// Post Processing Shaders:
-		var PPVertexShaderSource = """
-				#version 400 core
-				in vec3 aPos;
-				in vec2 aTexCoords;
-				
-				out vec2 TexCoords;
-				    
-				void main()
-				{
-				    TexCoords = aTexCoords;
-				    
-				    // Standard vertex position transformation (pass through)
-				    gl_Position = vec4(aPos, 1.0);
-				}
-				""";
-		var hPPVertexShader = glCreateShader(GL_VERTEX_SHADER);
-		glShaderSource(hPPVertexShader, PPVertexShaderSource);
-		glCompileShader(hPPVertexShader);
-		if (glGetShaderi(hPPVertexShader, GL_COMPILE_STATUS) != GL_TRUE)
-			throw new Exception(glGetShaderInfoLog(hPPVertexShader));
 
-		var PPFragmentShaderSource = """
-				#version 400 core
-				in vec2 TexCoords;
-				out vec4 outColor;
-				uniform sampler2D screenTexture;
-				
-				void main()
-				{
-					outColor = texture(screenTexture, TexCoords);
-					// reduce blue light
-					outColor = vec4(outColor.x, outColor.y, outColor.z / 3, outColor.w);
-				}
-				""";
-		var hPPFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(hPPFragmentShader, PPFragmentShaderSource);
-		glCompileShader(hPPFragmentShader);
-		if (glGetShaderi(hPPFragmentShader, GL_COMPILE_STATUS) != GL_TRUE)
-			throw new Exception(glGetShaderInfoLog(hPPFragmentShader));
-
-		var hPPProgram = glCreateProgram();
-		glAttachShader(hPPProgram, hPPFragmentShader);
-		glAttachShader(hPPProgram, hPPVertexShader);
-		glLinkProgram(hPPProgram);
-		if (glGetProgrami(hProgram, GL_LINK_STATUS) != GL_TRUE)
-			throw new Exception(glGetProgramInfoLog(hProgram));
 
 		int[] width = new int[1];
 		int[] height = new int[1];
@@ -281,6 +283,7 @@ public class OpenGL {
 			glBindBuffer(GL_ARRAY_BUFFER, vboTriangleVertices);
 			glVertexAttribPointer(posAttribIndex, 3, GL_FLOAT, false, 0, 0);
 		}
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
 		// also vao
 		var colorAttribIndex = glGetAttribLocation(hProgram, "inColor");
 		if (colorAttribIndex != -1) {
@@ -310,58 +313,44 @@ public class OpenGL {
 				1.0f,  1.0f,  1.0f, 1.0f  // Top-right
 		};
 		int[] quadIndices = {
-				0, 1, 2,
-				0, 2, 3
+				0, 1, 2, // First triangle
+				0, 2, 3  // Second triangle
 		};
+		int quadVAO = glGenVertexArrays();
+		int quadVBO = glGenBuffers();
+		int quadEBO = glGenBuffers();
 
-		// VAO and VBO
-		int quadVBO = glGenVertexArrays();
+		glBindVertexArray(quadVAO);
+
 		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
 		glBufferData(GL_ARRAY_BUFFER, quadVertices, GL_STATIC_DRAW);
-		int quadVAO = glGenVertexArrays();
-		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-		glBufferData(GL_ARRAY_BUFFER, quadIndices, GL_STATIC_DRAW);
-		glBindVertexArray(quadVAO);
-		int quadEBO = glGenBuffers();
+
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, quadIndices, GL_STATIC_DRAW);
 
-
-		int quadVBOParam = glGetAttribLocation(hPPProgram, "aPos");
-		if (quadVBOParam != -1) {
-			glEnableVertexAttribArray(quadVBOParam);
-			glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-			glVertexAttribPointer(quadVBOParam, 2, GL_FLOAT, false, 0, 0);
+		int aPosLocation = glGetAttribLocation(hPPProgram, "aPos");
+		if (aPosLocation != -1) {
+			glVertexAttribPointer(aPosLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 0); // First 2 floats are position
+			glEnableVertexAttribArray(aPosLocation);
 		}
-		int quadVAOParam = glGetAttribLocation(hPPProgram, "aPos");
-		if (quadVAOParam != -1) {
-			glEnableVertexAttribArray(quadVAOParam);
-			glBindBuffer(GL_ARRAY_BUFFER, quadVAO);
-			glVertexAttribPointer(quadVAOParam, 2, GL_FLOAT, false, 0, 0);
-		}
-		int quadEBOParam  = glGetAttribLocation(hPPProgram, "aTexCoords");
-		if (quadEBOParam != -1) {
-			glEnableVertexAttribArray(quadEBOParam);
-			glBindBuffer(GL_ARRAY_BUFFER, quadEBO);
-			glVertexAttribPointer(quadEBOParam, 2, GL_FLOAT, false, 0, 0);
-		}
-		// Vertex attributes
-		glVertexAttribPointer(0, 2, GL_FLOAT, false, 4 * Float.BYTES, 0);
-		glEnableVertexAttribArray(0);
 
-		glVertexAttribPointer(1, 2, GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES);
-		glEnableVertexAttribArray(1);
-
+		int aTexCoordsLocation = glGetAttribLocation(hPPProgram, "aTexCoords");
+		if (aTexCoordsLocation != -1) {
+			glVertexAttribPointer(aTexCoordsLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES); // Next 2 floats are texcoords
+			glEnableVertexAttribArray(aTexCoordsLocation);
+		}
+		// Unbind VAO
 		glBindVertexArray(0);
 
 		// main texture example
-		var texture = new Texture("../textures/MinecraftGlowstone.jpg");
+		var texture = new Texture("./textures/MinecraftGlowstone.jpg");
 		int hTexture = glGenTextures();
 		glBindTexture(GL_TEXTURE_2D, hTexture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.getTexture().getWidth(), texture.getTexture().getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, texture.getTextureBuffer());
 		glGenerateMipmap(GL_TEXTURE_2D);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+
 		// texture for fbo
 		int fboWidth = width[0], fboHeight = height[0];
 		int fboTextureId = glGenTextures();
@@ -395,10 +384,11 @@ public class OpenGL {
 				GL_DEPTH_ATTACHMENT,
 				GL_RENDERBUFFER,
 				rboId);
-
-		// check for errors during all previous calls
 		assert(glCheckFramebufferStatus(GL_FRAMEBUFFER)
 				== GL_FRAMEBUFFER_COMPLETE);
+
+		// check for errors during all previous calls
+
 		var error = glGetError();
 		if (error != GL_NO_ERROR)
 			throw new Exception(Integer.toString(error));
@@ -416,6 +406,9 @@ public class OpenGL {
 		// render loop
 		var startTime = System.currentTimeMillis();
 		while (!GLFW.glfwWindowShouldClose(hWindow)) {
+//			glUseProgram(hProgram);
+//			glEnable(GL_DEPTH_TEST);
+//			glDepthFunc(GL_LESS);
 			GLFW.glfwGetWindowSize(hWindow, width, height);
 			float aspectRatio = width[0] / (float) height[0];
 			Matrix4x4 P = Matrix4x4.createPerspectiveFieldOfView(1.5708f, aspectRatio, zNear, zFar);
@@ -485,20 +478,18 @@ public class OpenGL {
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, fboTextureId);
 			glUniform1i(glGetUniformLocation(hPPProgram, "screenTexture"), 0);
-			// render screen as texture
-			glBindVertexArray(quadVAO);
-			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-			glBindVertexArray(0);
 			// render to screen
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glViewport(0, 0, width[0], height[0]);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glBindVertexArray(quadVAO);
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
+
 			// display
 			GLFW.glfwSwapBuffers(hWindow);
 			GLFW.glfwPollEvents();
 			// switch back
-			glUseProgram(hProgram);
-
 			error = glGetError();
 			if (error != GL_NO_ERROR)
 				throw new Exception(Integer.toString(error));
