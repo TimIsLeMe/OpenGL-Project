@@ -101,7 +101,7 @@ public class OpenGL {
 				{
 					outColor = texture(screenTexture, TexCoords);
 					// reduce blue light
-					outColor = vec4(outColor.x, outColor.y, outColor.z / 3, outColor.w);
+					outColor = vec4(outColor.x, outColor.y, outColor.z / 2, 1);
 				}
 				""";
 		var hPPFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
