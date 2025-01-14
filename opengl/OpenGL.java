@@ -440,38 +440,29 @@ public class OpenGL {
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			// rendering objects:
-			var m = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
-			var someMatrix = m.multiply(mvp);
-			var transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someMatrix.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
-			// render our model
-			glBindVertexArray(vaoTriangle);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
-			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
-			// render our model 2
-			m = Matrix4x4.createRotationX((float) Math.sin(time)).multiply(Matrix4x4.createRotationY((float) Math.cos(time)))
+			var m1 = (Matrix4x4.createRotationX((float) Math.cos(time))).multiply(Matrix4x4.createRotationY((float) Math.sin(time)));
+			var someMatrix = m1.multiply(mvp);
+			var m2 = Matrix4x4.createRotationX((float) Math.sin(time)).multiply(Matrix4x4.createRotationY((float) Math.cos(time)))
 					.multiply(matrix2);
-			var someOtherMatrix = m.multiply(mvp);
-			transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherMatrix.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
-			glBindVertexArray(vaoTriangle);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
-			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
-			// render our model 3
-			m = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
+			var someOtherMatrix = m2.multiply(mvp);
+			var m3 = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
 					.multiply(matrix3);
-			var someOtherOtherMatrix = m.multiply(mvp);
-			transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, someOtherOtherMatrix.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
-			glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
-			glBindVertexArray(vaoTriangle);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
-			glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
+			var someOtherOtherMatrix = m3.multiply(mvp);
+			var m4 = Matrix4x4.createTranslation(new Vector3(2f, -2f, 10f));
+			var someOtherOtherOtherMatrix = m3.multiply(mvp.multiply(Matrix4x4.createScale(new Vector3(20f, 10f, 20f))));
+			var objectsWithMatrices = new Matrix4x4[] {someMatrix, someOtherMatrix, someOtherOtherMatrix, someOtherOtherOtherMatrix};
+			var rotationMs = new Matrix4x4[] {m1, m2, m3, m4};
+			for(int i = 0; i < objectsWithMatrices.length; i++) {
+				var matrix = objectsWithMatrices[i];
+				var m = rotationMs[i];
+				var transfM = Matrix4x4.transpose(Matrix4x4.invert(m)).multiply(m.getDeterminant());
+				glUniformMatrix4fv(glGetUniformLocation(hProgram, "inMatrix"), false, matrix.toArray());
+				glUniformMatrix4fv(glGetUniformLocation(hProgram, "modelMatrix"), false, m.toArray());
+				glUniformMatrix4fv(glGetUniformLocation(hProgram, "transfM"), false, transfM.toArray());
+				glBindVertexArray(vaoTriangle);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboTriangleIndices);
+				glDrawElements(GL_TRIANGLES, triangleIndices.length, GL_UNSIGNED_INT, 0);
+			}
 			// end of rendering objects
 			// switch to post-processing
 			glUseProgram(hPPProgram);
