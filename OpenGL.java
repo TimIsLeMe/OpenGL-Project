@@ -1,5 +1,3 @@
-package opengl;
-
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GLDebugMessageCallback;
@@ -63,6 +61,8 @@ public class OpenGL {
 		glClearColor(0.5f, 0.5f, 0.5f, 0.0f);
 		glEnable(GL_DEPTH_TEST);
 		glDepthFunc(GL_LESS);
+//		glEnable(GL_BLEND); // for transparency
+//		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		// glClearDepth(1);
 		// glDisable(GL_DEPTH_TEST);
 		// glDepthFunc(GL_LESS);
@@ -72,17 +72,17 @@ public class OpenGL {
 		// Post Processing Shaders:
 		var PPVertexShaderSource = """
 				#version 400 core
-				in vec3 aPos;
-				in vec2 aTexCoords;
+				in vec3 inPos;
+				in vec2 inTexCoords;
 
-				out vec2 TexCoords;
+				out vec2 texCoords;
 
 				void main()
 				{
-				    TexCoords = aTexCoords;
+				    texCoords = inTexCoords;
 
 				    // Standard vertex position transformation (pass through)
-				    gl_Position = vec4(aPos, 1.0);
+				    gl_Position = vec4(inPos, 1.0);
 				}
 				""";
 		var hPPVertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -93,15 +93,18 @@ public class OpenGL {
 
 		var PPFragmentShaderSource = """
 				#version 400 core
-				in vec2 TexCoords;
+				in vec2 texCoords;
 				out vec4 outColor;
 				uniform sampler2D screenTexture;
-
+				
 				void main()
 				{
-					outColor = texture(screenTexture, TexCoords);
-					// reduce blue light
-					outColor = vec4(outColor.x, outColor.y, outColor.z / 2, 1);
+					outColor = texture(screenTexture, texCoords, 1.0);
+					//float multi = sin(texCoords.x * outColor.z / 255 + sin(texCoords.x * 0.5) * cos(texCoords.y * 7));
+					float something = sin(texCoords.x) * cos(texCoords.y);
+					float somethingElse = texCoords.y * texCoords.x;
+					something = (somethingElse + something * float(int(floor(sin(texCoords.x + texCoords.y) * 10)) % 2)) / something;
+					outColor = vec4(outColor.x * something, outColor.y * something, outColor.z * something, 1);
 				}
 				""";
 		var hPPFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -137,7 +140,6 @@ public class OpenGL {
 								
 				void main()
 				{
-					vec4 movement = vec4(sin(inTime) * 0.5, cos(inTime) * 0.5, 0.0, 0.0);
 					vec4 worldPos = modelMatrix * vec4(inPos, 1.0);
 				    fragPos = gl_Position.xyz;
 				    fragNormal = normalize(mat3(transfM) * inNormal);
@@ -174,8 +176,10 @@ public class OpenGL {
 				void main()
 				{
 				  vec3 textureColor = color;
+				  vec4 fullTexture;
 				  if(hasTexture == 1) {
-				  	textureColor = texture(textureT, st).xyz;
+				  	fullTexture = texture(textureT, st);
+				  	textureColor = fullTexture.xyz;
 				  }
 				  vec3 norm = normalize(fragNormal);
 				  vec3 lightDir = normalize(lightPos - fragPos);
@@ -186,7 +190,7 @@ public class OpenGL {
 				  vec3 ambient = 0.1 * lightColor;
 				  vec3 diffuse = diff * lightColor;
 				  vec3 specular = spec * lightColor;
-				  outColor = vec4((ambient + diffuse + specular) * textureColor, 1.0);
+				  outColor = vec4((ambient + diffuse + specular) * textureColor, fullTexture.w);
 				}
 				""";
 		// vec4 texelColor = texture(brickTexture, vec2(0,0));
@@ -328,16 +332,16 @@ public class OpenGL {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, quadIndices, GL_STATIC_DRAW);
 
-		int aPosLocation = glGetAttribLocation(hPPProgram, "aPos");
-		if (aPosLocation != -1) {
-			glVertexAttribPointer(aPosLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 0); // First 2 floats are position
-			glEnableVertexAttribArray(aPosLocation);
+		int inPosLocation = glGetAttribLocation(hPPProgram, "inPos");
+		if (inPosLocation != -1) {
+			glVertexAttribPointer(inPosLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 0); // First 2 floats are position
+			glEnableVertexAttribArray(inPosLocation);
 		}
 
-		int aTexCoordsLocation = glGetAttribLocation(hPPProgram, "aTexCoords");
-		if (aTexCoordsLocation != -1) {
-			glVertexAttribPointer(aTexCoordsLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES); // Next 2 floats are texcoords
-			glEnableVertexAttribArray(aTexCoordsLocation);
+		int inTexCoordsLocation = glGetAttribLocation(hPPProgram, "inTexCoords");
+		if (inTexCoordsLocation != -1) {
+			glVertexAttribPointer(inTexCoordsLocation, 2, GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES); // Next 2 floats are texcoords
+			glEnableVertexAttribArray(inTexCoordsLocation);
 		}
 		// Unbind VAO
 		glBindVertexArray(0);
@@ -348,8 +352,6 @@ public class OpenGL {
 		glBindTexture(GL_TEXTURE_2D, hTexture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.getTexture().getWidth(), texture.getTexture().getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, texture.getTextureBuffer());
 		glGenerateMipmap(GL_TEXTURE_2D);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
 
 		// texture for fbo
 		int fboWidth = width[0], fboHeight = height[0];
@@ -406,9 +408,7 @@ public class OpenGL {
 		// render loop
 		var startTime = System.currentTimeMillis();
 		while (!GLFW.glfwWindowShouldClose(hWindow)) {
-//			glUseProgram(hProgram);
-//			glEnable(GL_DEPTH_TEST);
-//			glDepthFunc(GL_LESS);
+
 			GLFW.glfwGetWindowSize(hWindow, width, height);
 			float aspectRatio = width[0] / (float) height[0];
 			Matrix4x4 P = Matrix4x4.createPerspectiveFieldOfView(1.5708f, aspectRatio, zNear, zFar);
@@ -426,7 +426,10 @@ public class OpenGL {
 			glBindTexture(GL_TEXTURE_2D, hTexture);
 			glUniform1i(glGetUniformLocation(hProgram, "textureT"), tiuIndex);
 			glUniform1i(glGetUniformLocation(hProgram, "hasTexture"), 1);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
 			// set uniform values
 			glUniform3f(glGetUniformLocation(hProgram, "lightPos"), lightPos.x(), lightPos.y(), lightPos.z());
 			glUniform3f(glGetUniformLocation(hProgram, "viewPos"), eye.x(), eye.y(), eye.z());
@@ -448,10 +451,14 @@ public class OpenGL {
 			var m3 = (Matrix4x4.createRotationX(1f + (float) Math.sin(0.7f + time))).multiply(Matrix4x4.createRotationY((float) Math.cos(1.3f + time)))
 					.multiply(matrix3);
 			var someOtherOtherMatrix = m3.multiply(mvp);
-			var m4 = Matrix4x4.createTranslation(new Vector3(2f, -2f, 10f));
-			var someOtherOtherOtherMatrix = m3.multiply(mvp.multiply(Matrix4x4.createScale(new Vector3(20f, 10f, 20f))));
-			var objectsWithMatrices = new Matrix4x4[] {someMatrix, someOtherMatrix, someOtherOtherMatrix, someOtherOtherOtherMatrix};
-			var rotationMs = new Matrix4x4[] {m1, m2, m3, m4};
+			var m4 = Matrix4x4.createScale(new Vector3(500f, 0.1f, 500f))
+					.multiply(Matrix4x4.createTranslation(1f, -5f, -2f))
+					.multiply(Matrix4x4.createRotationX(-0.75f));
+			var someOtherOtherOtherMatrix = m4.multiply(mvp);
+			var someOtherOtherOtherOtherMatrix = m1.multiply(Matrix4x4.createTranslation(1f, 2f, 1f)).multiply(mvp);
+			var someOtherOtherOtherOtherOtherMatrix = m2.multiply(Matrix4x4.createTranslation(2f, 1f, 3f)).multiply(mvp);
+			var objectsWithMatrices = new Matrix4x4[] {someMatrix, someOtherMatrix, someOtherOtherMatrix, someOtherOtherOtherMatrix, someOtherOtherOtherOtherMatrix, someOtherOtherOtherOtherOtherMatrix};
+			var rotationMs = new Matrix4x4[] {m1, m2, m3, m4, m1, m2};
 			for(int i = 0; i < objectsWithMatrices.length; i++) {
 				var matrix = objectsWithMatrices[i];
 				var m = rotationMs[i];
